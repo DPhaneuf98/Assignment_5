@@ -35,28 +35,13 @@ int main(int argc, char *argv[])
     printf("\n Enter a username: ");
     scanf("%s",user);
 
-  /* Clear the data structure (saddr) to 0's. */
+  // Creating the socket connection
   memset(&bba,0,sizeof(bba));
-
-  /* Tell our socket to be of the internet family (AF_INET). */
   bba.sin_family = AF_INET;
-
-  /* Acquire the ip address of the server */
   hp=gethostbyname(hostname);
-
-  /* Acquire the port #. */
   port=atoi(portnum);
-
-  /* Copy the server's address to the socket address data structure. */
   memcpy(&bba.sin_addr, hp->h_addr, hp->h_length);
-
-  /* Convert the integer Port Number to the network-short standard
-   * required for networking stuff. This accounts for byte order differences.*/
   bba.sin_port=htons(port);
-  
-  /* Now that we have our data structure full of useful information,
-   * open up the socket the way we want to use it.
-   */
 
   
 
@@ -69,12 +54,16 @@ int main(int argc, char *argv[])
 
   pid_t fork_return;
   fork_return = fork();
-  if(fork_return ==0)
+  if(fork_return ==0) // Child
   {
-   /* read from the socket, write to the screen */
-    
+      int first = 0;
+      printf("Press enter to join \n");
       while( (num_char=read(0,ch,MAXLINE)) > 0 ){
-          printf("User: %s\n",user);
+          while(first==0)                    // displays username to the server
+          {
+              write(s,user,25);
+              first = 1;
+          }
     if ( write(s,ch,num_char) < num_char)
       OOPS("writing");
       }
