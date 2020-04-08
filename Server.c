@@ -9,79 +9,116 @@
 #include <netinet/in.h>
 #include <netdb.h>
 
-#define PORTNUM
-#define BBSD_FILE
-#define ERR(msg)
+/* Use port number 0 so that we can dynamically assign an unused
+ * port number. */
+#define PORTNUM         0
 
+/* Set up the location for the file to display when the daemon (okay,
+ * server for you religious types) is contacted by the client. */
+#define BBSD_FILE       "./test.bbs.file"
+/*"/nfs/net/share/ftp/pub/class/330/test.file" */
+
+/* Display error message on stderr and then exit. */
+#define OOPS(msg)       {perror(msg); exit(1);}
+
+#define MAXLINE 512
 
 int main()
 {
-  struct sockaddr_in saddr;
-  struct hostent *hp;
-  char hostname[256];
-  socklen_t slen;
-  int s;
-  int sfd;
-  char ch[MAXLINE];
-  FILE *sf;
+  struct sockaddr_in saddr;       /* socket information */
+  struct hostent *hp;     /* host information */
+  char hostname[256];     /* host computer */
+  socklen_t slen;         /* length socket address */
+  int s;                  /* socket return value */
+  int sfd;                /* socket descriptor returned from accept() */
+  char ch[MAXLINE];       /* character for i/o */
+  FILE *sf;               /* various file descriptors */
   int bbf;
   int num_char=MAXLINE;
   
-  
+  /*
+   * Build up our network address. Notice how it is made of machine name + port.
+   */
+
+  /* Clear the data structure (saddr) to 0's. */
   memset(&saddr,0,sizeof(saddr));
+
+  /* Tell our socket to be of the internet family (AF_INET). */
   saddr.sin_family = AF_INET;
+
+  /* Aquire the name of the current host system (the local machine). */
   gethostname(hostname,sizeof(hostname));
+
+  /* Return misc. host information.  Store the results in the
+   * hp (hostent) data structure.  */
   hp = gethostbyname(hostname);
-  memcpy(&saddr.sin_addr,hp->h_addr,hp->h_length);
+
+  /* Copy the host address to the socket data structure. */
+  memcpy(&saddr.sin_addr, hp->h_addr, hp->h_length);
+
+  /* Convert the integer Port Number to the network-short standard
+   * required for networking stuff. This accounts for byte order differences.*/
   saddr.sin_port = htons(PORTNUM);
   
-  s = socket(AF_INET, SOCK_STREAM,0);
-  if(s==-1)
-    ERR("socket");
-    
+  /*
+   * Now that we have our data structure full of useful information,
+   * open up the socket the way we want to use it.
+   */
+  s = socket(AF_INET, SOCK_STREAM, 0);
+  if(s == -1)
+    OOPS("socket");
+
+  /* Register our address with the system. */
   if(bind(s,(struct sockaddr *)&saddr,sizeof(saddr)) != 0)
-    ERR("bind");
-    
+    OOPS("bind");
+
+  /* Display the port that has been assigned to us. */
   slen = sizeof(saddr);
   getsockname(s,(struct sockaddr *)&saddr,&slen);
-  printf(Socket assigned: %d\n",ntohs(saddr.sin_port));
-  
-  if(listens(s,1)!=0)
-    ERR("listen");
-    
+  printf("Socket assigned: %d\n",ntohs(saddr.sin_port));
+
+  /* Tell socket to wait for input.  Queue length is 1. */
+  if(listen(s,1) != 0)
+    OOPS("listen");
+
+  /* Loop indefinately and wait for events. */
   for(;;)
   {
-    sfd = accepts(s,NULL,NULL);
+    /* Wait in the 'accept()' call for a client to make a connection. */
+    sfd = accept(s,NULL,NULL);
     if(sfd == -1)
-      ERR("accepts");
+      OOPS("accept");
       
-     pid_t fork_return;
-     fork_return = fork();
-     
-     if(fork_return==-1)
-     {
-        printf("Fork error: \n");
-        return 1;
-     }
-     else if(fork_return == 0)
-     {
-        while((num_char=read(0,ch,MAXLINE))>0)
-          if(write(sfd,ch,nu_char)<num_char)
-            ERR("writing");
-         close(s);
-           
-         return 1;
-     }
-     else if(fork_return >0)
-     {
-        while((num_char=read(sfd,ch,MAXLINE))> 0)
+    /* Open our file for copying to the socket. */
+    
+  pid_t fork_return;
+  fork_return = fork();
+
+  if(fork_return>0)
+  {
+      /*Read from file, write to socket*/
+      while((num_char=read(sfd,ch,MAXLINE))> 0)
         if (write(1,ch,num_char) < num_char)
            OOPS("writing");
       close(bbf);
     
     close(sfd);
-
-     }
-     return 0;
-  } 
   }
+  else if(fork_return==0)
+  {
+  /* read from the socket, write to the screen */
+  while( (num_char=read(0,ch,MAXLINE)) > 0 )
+    if ( write(sfd,ch,num_char) < num_char)
+      OOPS("writing");
+    close(s);
+
+    return 1;
+  }
+   else if(fork_return==-1)
+  {
+    printf("ERROR: \n");
+    return 1;
+  }
+}
+  return 0;
+} 
